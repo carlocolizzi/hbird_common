@@ -1,6 +1,18 @@
-from hbird_msgs.msg import Waypoint
+#from hbird_msgs.msg import Waypoint
 from queue import PriorityQueue
 import math
+
+class Node:
+    def __init__(self, x, y, f, g, h, parent):
+        self.x = x
+        self.y = y
+        self.f = f
+        self.g = g
+        self.h = h
+        self.parent = parent
+
+    def __lt__(self, other):
+        return self.f < other.f
 
 class PathPlanner():
     """
