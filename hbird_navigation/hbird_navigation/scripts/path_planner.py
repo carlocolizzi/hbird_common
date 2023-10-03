@@ -94,6 +94,7 @@ class PathPlanner():
         while self.open:
             node = self.open.get()      # this is a node object
             self.closed.append(node)
+<<<<<<< HEAD
 
             if node.x == self.env.goal_pose.position.x and node.y == self.env.goal_pose.position.y:
                 
@@ -110,9 +111,15 @@ class PathPlanner():
                 path.reverse()
 
                 return path
+=======
+        
+            if node == self.env.goal_pos:
+                return self.open 
+>>>>>>> 41f19d51bcabc180a20028b6b08a93ea86680e8e
             else:
                 neighbours = self.get_neighbours(node) 
 
+<<<<<<< HEAD
             for element in neighbours:
 
                 bounds = self.check_bounds(element)
@@ -130,6 +137,45 @@ class PathPlanner():
                     self.open.get(old one)
                     self.open.put(element)
    
+=======
+    
+                for element in neighbours:
+                    element.parent = node
+                    distance.x = self.env.goal_pos.position.x - element.x
+                    distance.y = self.env.goal_pos.position.y - element.y
+                    element.h = math.sqrt(distance.x **2 + distance.y **2)
+                    element.g = node.g + math.sqrt(node.x-element.x ** 2 + node.y - element.y ** 2)
+                    element.f = element.g + element.h
+                
+                    if element in self.open.queue:
+                        existing_node = None   # find out if element is in open set and lower f 
+                        for open_node in self.open.queue:
+                            if open_node.x == element.x and open_node.y == element.y: 
+                                existing_node = open_node
+                                break
+                        if existing_node is not None and element.f < existing_node.f:  # if lower f, update existing node in open set 
+                            existing_node.g = element.g
+                            existing_node.f = element.f
+                            existing_node.parent = element.parent 
+                    else:
+                        if element in self.closed:
+                            existing_node = self.closed[element]
+                        if element.f < existing_node.f:  # if lower f, update existing node in closed set
+                            self.closed.remove(element)
+                            self.open.put(element)
+                        else:
+                            self.open.put(element)
+                '''
+                if element in self.open.queue and element.f > self.open.queue[element].f: ### need to fidn out how to find element in queue ## added slef.open.queue to get elements in queue 
+                    continue
+                if element in self.closed and element.f > self.closed[element].f: ### need to fidn out how to find element in queue
+                    continue
+                
+                self.open.get(element)
+                self.closed.get(element)
+                self.open.put(element)
+                '''
+>>>>>>> 41f19d51bcabc180a20028b6b08a93ea86680e8e
         return None
 
             
