@@ -1,14 +1,14 @@
-#from hbird_msgs.msg import Waypoint
+from hbird_msgs.msg import Waypoint
 from queue import PriorityQueue
 import math
 
 class Node:
-    def __init__(self, x, y, f, g, h, parent):
+    def __init__(self, x, y, g, h, f, parent):
         self.x = x
         self.y = y
-        self.f = f
         self.g = g
         self.h = h
+        self.f = f
         self.parent = parent
 
     def __lt__(self, other):
@@ -20,6 +20,7 @@ class PathPlanner():
 
     You are to implement the __init__ and plan methods. Feel free to add any more methods.
     """
+
     def __init__(self, env):
         """
         Inputs:
@@ -29,23 +30,58 @@ class PathPlanner():
         self.env = env
         
         self.open = PriorityQueue() ### FIND WAY OF SORTING QUEUE
-
-        self.open.put(self.env.start_pos)
+        
+        start_node = Node(self.env.start_pose.position.x, self.env.start_pose.position.y, 0, self.heuristic(self.env.start_pose.position.x, self.env.start_pose.position.y), self.heuristic(self.env.start_pose.position.x, self.env.start_pose.position.y), None)
+        self.open.put(start_node.f, start_node)
 
         self.closed = []
         
+    def heuristic(self, x, y):
+        
+        x1 = self.env.goal_pose.position.x - x
+        y1 = self.env.goal_pose.position.y - y
+        heuristic = math.sqrt(x1 **2 + y1 **2)
+        
+        return heuristic
 
     def get_neighbours(self, node):
         x = node.x
         y = node.y 
-
-        neighbours = [[x-self.env.grid_size, y - self.env.grid_size], [x-self.env.grid_size, y], [x-self.env.grid_size, y + self.env.grid_size],
+        neighbours = []
+        
+        neighbours_coordinates = [[x-self.env.grid_size, y - self.env.grid_size], [x-self.env.grid_size, y], [x-self.env.grid_size, y + self.env.grid_size],
                       [x, y - self.env.grid_size], [x, y + self.env.grid_size],
-                      [x+self.env.grid_size, y - self.env.grid_size], [x+self.env.grid_size, y], [x+self.env.grid_size, y + self.env.grid_size],]
+                      [x+self.env.grid_size, y - self.env.grid_size], [x+self.env.grid_size, y], [x+self.env.grid_size, y + self.env.grid_size]]
+        
+        for each in neighbours_coordinates:
+            temp = Node(each[0], each[1], node.g + 1, self.heuristic(each[0], each[1]), node.g + 1 + self.heuristic(each[0], each[1]), node)
+            neighbours.append(temp)
         
         return neighbours
+    
+    def check_bounds(self, node):
 
+        check = False
 
+        if node.x >= self.env.x_min and node.x <= self.env.x_max:
+            if node.y >= self.env.y_min and node.y <= self.env.y_max:
+                check = True
+        
+        return check
+        
+    def check_obstacles(self, node):
+        check = False
+
+        corner1 = [node.x - self.env.robot_radius, node.y - self.env.robot_radius]
+        corner2 = [node.x + self.env.robot_radius, node.y - self.env.robot_radius]
+        corner3 = [node.x - self.env.robot_radius, node.y + self.env.robot_radius]
+        corner4 = [node.x + self.env.robot_radius, node.y + self.env.robot_radius]
+
+        if corner1 not in self.env.obstacles["x"]["y"] and corner2 not in self.env.obstacles and corner3 not in self.env.obstacles and corner4 not in self.env.obstacles:
+            check = True            ### NEED TO FIND WAY TO COMPARE LIST TO DICTIONARY VALUES BY PAIR
+
+        return check
+    
     def plan(self):
         """
         Main method that computes and returns the path
@@ -56,30 +92,44 @@ class PathPlanner():
         distance = []
         
         while self.open:
-            node = self.open.get()
+            node = self.open.get()      # this is a node object
             self.closed.append(node)
 
-            if node == self.env.goal_pos:
-                return self.open 
+            if node.x == self.env.goal_pose.position.x and node.y == self.env.goal_pose.position.y:
+                
+                path = []
+                
+                while node:
+                    waypoint = Waypoint()
+                    waypoint.position.x = node.x
+                    waypoint.position.y = node.y
+                    
+                    path.append(waypoint)
+                    node = node.parent
+                
+                path.reverse()
+
+                return path
             else:
-                neighbours = get_neighbours(node) 
+                neighbours = self.get_neighbours(node) 
 
             for element in neighbours:
-                element.parent = node
-                distance.x = self.env.goal_pos.position.x - element.x
-                distance.y = self.env.goal_pos.position.y - element.y
-                element.h = math.sqrt(distance.x **2 + distance.y **2)
-                element.g = node.g + math.sqrt(node.x-element.x ** 2 + node.y - element.y ** 2)
-                element.f = element.g + element.h
+
+                bounds = self.check_bounds(element)
+                obstacles = self.check_obstacles(element)
                 
-                if element in self.open and element.f > self.open.f: ### need to fidn out how to find element in queue
-                    continue
-                if element in self.closed and element.f > self.closed.f: ### need to fidn out how to find element in queue
-                    continue
-                self.open.get(element)
-                self.closed.get(element)
-                self.open.put(element)
-    
+                comparison =  self.open
+
+                if bounds == True and obstacles == True:
+                    if element in self.closed: 
+                        continue
+                    if element in self.open:
+                        if element.f > self.open[].f: ### need to fidn out how to find element in dict
+                            continue
+                    
+                    self.open.get(old one)
+                    self.open.put(element)
+   
         return None
 
             
