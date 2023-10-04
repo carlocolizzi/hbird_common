@@ -18,7 +18,7 @@ class AgentControlNode(Node):
 
         self.get_logger().info('Starting up the Agent Control Node...')
 
-        # TODO: Add the parameter getter and the parameter declaration
+        # Add the parameter getter and the parameter declaration
         param_descriptor = ParameterDescriptor(description='Defines agent ID.')
         self.declare_parameter('agent_id', 'HB1', param_descriptor)
         self._agent_id = self.get_parameter('agent_id')._value
@@ -40,21 +40,18 @@ class AgentControlNode(Node):
         self._publish_timer = self.create_timer(self._publish_rate, self.control_cycle)
 
 
-        # planner config 
+        # planner config  
         config_path = "/home/robotics/robotics_ws/src/hbird_common/hbird_navigation/hbird_navigation/config/planner_config.yaml"
         config = self.load_config(config_path)
         self.env = Environment(config)
         self.path = self.plan_path()
 
-        # define stage
+        # define state and waypoint 
         self.current_target_index = 0
         self.target_height = 1.2 
-        
-        
         self.state_time = perf_counter()
         self.stage = "ground"
 
-        # waypoint coord 
         self.start_x = self.env.start_pose.position.x - 4.5
         self.start_y = self.env.start_pose.position.y - 5.0 
         self.goal_x = self.env.goal_pose.x - 4.5
@@ -73,7 +70,7 @@ class AgentControlNode(Node):
         self.pos_threshold = 0.1
         self.orient_threshold = 0.05
 
-    def load_config(self, config_path):
+    def load_config(self, config_path): 
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config
@@ -87,14 +84,14 @@ class AgentControlNode(Node):
     def state_update_callback(self, state_msg):
         self._state = state_msg # TODO: This is in ROS message format
 
-    def reached_pos(self, target_pos) -> bool:
+    def reached_pos(self, target_pos) -> bool: #checking if state met target pos 
         pos_error = math.sqrt(
             (self._state.position.x - target_pos.position.x)**2 +
             (self._state.position.y - target_pos.position.y)**2 +
             (self._state.position.z - target_pos.position.z)**2
         ) 
 
-        orient_error = abs(self.angle_wrap(self._state.orientation.z - target_pos.heading))
+        orient_error = abs(self.angle_wrap(self._state.orientation.z - target_pos.heading)) #check if orientation is met target
         return pos_error < self.pos_threshold and orient_error < self.orient_threshold
 
 
@@ -109,12 +106,12 @@ class AgentControlNode(Node):
            )
         )
         if self.stage == "ground":
-            pos_setpoint.position.x = self.x_des
+            pos_setpoint.position.x = self.x_des #position setpoint for ground stage
             pos_setpoint.position.y = self.y_des
             pos_setpoint.position.z = self.z_des
             pos_setpoint.heading = self.psi_des
            
-            if self.get_current_time() - self.state_time > 10: 
+            if self.get_current_time() - self.state_time > 10: # checks if time in stage passes 10 seconds
                 self.state_time = self.get_current_time()
                 self.stage = "takeoff"
         
@@ -129,10 +126,10 @@ class AgentControlNode(Node):
                 self.stage = "follow_path"
         
         elif self.stage == "follow_path":
-           current_target_waypoint = self.path[self.current_target_index]
+           current_target_waypoint = self.path[self.current_target_index] #waypoint current target 
            pos_setpoint = self.map_to_webots_transform(current_target_waypoint) # move waypoint to webots coordinates 
 
-           pos_setpoint.position.z = self.target_height
+           pos_setpoint.position.z = self.target_height #height to target height 
            pos_setpoint.heading = self.psi_des
 
            current_pos = (self._state.position.x, self._state.position.y)
