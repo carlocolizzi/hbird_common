@@ -2,13 +2,15 @@
 import rclpy
 import yaml
 import math
+import numpy as np 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-#from .planner_utils import Environment, Visualizer, PathPlanner
 from hbird_msgs.msg import Waypoint, State
 from time import perf_counter
+import pathlib
 
-from scripts.planner_utils import Environment, Visualizer, PathPlanner
+from .scripts.planner_utils import Environment, Visualizer
+from .scripts.path_planner import PathPlanner
 
 
 class AgentControlNode(Node):
@@ -41,10 +43,25 @@ class AgentControlNode(Node):
 
 
         # planner config  
-        config_path = "/home/robotics/robotics_ws/src/hbird_common/hbird_navigation/hbird_navigation/config/planner_config.yaml"
-        config = self.load_config(config_path)
-        self.env = Environment(config)
-        self.path = self.plan_path()
+        config_path = str(pathlib.Path().parent.resolve())+"/src/hbird_common/hbird_navigation/hbird_navigation/config/"
+        config_file = "planner_config.yaml"
+        try:
+            with open(config_path+config_file, "r") as file:
+                config = yaml.load(file, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            print(f"The file '{config_file}' does not exist.")
+        except yaml.YAMLError as e:
+            print(f"Error parsing the YAML file: {e}")
+
+        env = Environment(config)
+        # initialize planner
+        path_planner = PathPlanner(env)
+         # call path planner 
+        path = path_planner.plan()
+         # initialize and call the visualizer
+        viz = Visualizer(env)
+        viz.plot(path)
+
 
         # define state and waypoint 
         self.current_target_index = 0
@@ -58,12 +75,12 @@ class AgentControlNode(Node):
         self.goal_y = self.env.goal_pose.y - 5.0 
        
  
-        # set desired position setpoints
+        """# set desired position setpoints
         self.x_des = 0 #1.5
         self.y_des = 0 #1.5
         self.z_des = 0 #2.5
         self.psi_des = 6.283
-        self.z_ground = 0.26
+        self.z_ground = 0.26"""
 
 
         # set thresholds
@@ -79,7 +96,7 @@ class AgentControlNode(Node):
         return perf_counter()
     
     def angle_wrap(self, angle : float):
-        return (angle + np.pi) % (2 * np.pi) - np.pi  #still confused about this 
+        return (angle + np.pi) % (2 * np.pi) - np.pi  # 
     
     def state_update_callback(self, state_msg):
         self._state = state_msg # TODO: This is in ROS message format
@@ -119,32 +136,41 @@ class AgentControlNode(Node):
             pos_setpoint.position.x = self.start_x
             pos_setpoint.position.y = self.start_y
             pos_setpoint.position.z = self.target_height
-            pos_setpoint.heading = self.psi_des  
+            pos_setpoint.heading = self.psi_des  # target height for takeoff
 
             if self.reached_pos(pos_setpoint):
                 self.state_time = self.get_current_time()
                 self.stage = "follow_path"
         
         elif self.stage == "follow_path":
-           current_target_waypoint = self.path[self.current_target_index] #waypoint current target 
-           pos_setpoint = self.map_to_webots_transform(current_target_waypoint) # move waypoint to webots coordinates 
+            current_target_waypoint = self.path[self.current_target_index] #waypoint current target 
+            pos_setpoint = self.map_to_webots_transform(current_target_waypoint) # move waypoint to webots coordinates 
 
-           pos_setpoint.position.z = self.target_height #height to target height 
-           pos_setpoint.heading = self.psi_des
+            pos_setpoint.position.z = self.target_height #height to target height 
+            pos_setpoint.heading = self.psi_des
 
-           current_pos = (self._state.position.x, self._state.position.y)
-           target_pos = (pos_setpoint.position.x, pos_setpoint.position.y)
-           path_pos = (current_target_waypoint.position.x, current_target_waypoint.position.y)
+            current_pos = (self._state.position.x, self._state.position.y)
+            target_pos = (pos_setpoint.position.x, pos_setpoint.position.y)
+            path_pos = (current_target_waypoint.position.x, current_target_waypoint.position.y)
 
-           self.get_logger().info(f"Current Position: {current_pos}, Target Position: {target_pos}, Path position: {path_pos}") # go back to 
+            self.get_logger().info(f"Current Position: {current_pos}, Target Position: {target_pos}, Path position: {path_pos}") # go back to 
+           
+            if self.reached_pos(pos_setpoint):
+                self.current_target_index += 1
+                if self.current_target_index == len(self.path):
+                    self.state_time = self.get_current_time()
+                    self.stage = "land"
 
-        if self.reached_pos(pos_setpoint):
-            self.current_target_index += 1
+        elif self.stage == "land": 
+            pos_setpoint.position.x = self.goal_x
+            pos_setpoint.position.y = self.goal_y
+            pos_setpoint.position.z = self.z_ground
+            pos_setpoint.heading = self.psi_des
 
-            if self.current_target_index == len(self.path):
+            if self.reached_pos(pos_setpoint):
                 self.state_time = self.get_current_time()
-                self.stage = "land"
-        #elif land 
+                self.stage = "done" 
+
         # publish the setpoint
         self._pos_setpoint_publisher.publish(pos_setpoint)
 
