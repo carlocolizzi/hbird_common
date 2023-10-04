@@ -1,9 +1,14 @@
 
 import rclpy
+import yaml
+import math
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-
+#from .planner_utils import Environment, Visualizer, PathPlanner
 from hbird_msgs.msg import Waypoint, State
+from time import perf_counter
+
+from scripts.planner_utils import Environment, Visualizer, PathPlanner
 
 
 class AgentControlNode(Node):
@@ -34,10 +39,28 @@ class AgentControlNode(Node):
         self._publish_rate = 0.5  # sec/cycle
         self._publish_timer = self.create_timer(self._publish_rate, self.control_cycle)
 
-        # define stage
-        self.stage = "ground"
-        self._state = State()
 
+        # planner config 
+        config_path = "/home/robotics/robotics_ws/src/hbird_common/hbird_navigation/hbird_navigation/config/planner_config.yaml"
+        config = self.load_config(config_path)
+        self.env = Environment(config)
+        self.path = self.plan_path()
+
+        # define stage
+        self.current_target_index = 0
+        self.target_height = 1.2 
+        
+        
+        self.state_time = perf_counter()
+        self.stage = "ground"
+
+        # waypoint coord 
+        self.start_x = self.env.start_pose.position.x - 4.5
+        self.start_y = self.env.start_pose.position.y - 5.0 
+        self.goal_x = self.env.goal_pose.x - 4.5
+        self.goal_y = self.env.goal_pose.y - 5.0 
+       
+ 
         # set desired position setpoints
         self.x_des = 0 #1.5
         self.y_des = 0 #1.5
@@ -45,30 +68,94 @@ class AgentControlNode(Node):
         self.psi_des = 6.283
         self.z_ground = 0.26
 
+
         # set thresholds
         self.pos_threshold = 0.1
         self.orient_threshold = 0.05
 
+    def load_config(self, config_path):
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config
 
+    def get_current_time(self):
+        return perf_counter()
+    
+    def angle_wrap(self, angle : float):
+        return (angle + np.pi) % (2 * np.pi) - np.pi  #still confused about this 
+    
     def state_update_callback(self, state_msg):
         self._state = state_msg # TODO: This is in ROS message format
 
-    
-    def control_cycle(self):
+    def reached_pos(self, target_pos) -> bool:
+        pos_error = math.sqrt(
+            (self._state.position.x - target_pos.position.x)**2 +
+            (self._state.position.y - target_pos.position.y)**2 +
+            (self._state.position.z - target_pos.position.z)**2
+        ) 
 
+        orient_error = abs(self.angle_wrap(self._state.orientation.z - target_pos.heading))
+        return pos_error < self.pos_threshold and orient_error < self.orient_threshold
+
+
+    def control_cycle(self):
         pos_setpoint = Waypoint()
 
-        # your code here
-        # set Waypoint according to x_des, y_des, etc.
-        # ??? how to define the waypoint ???
-        pos_setpoint.x = 1
-    
+        self.get_logger().info( 
+            "State: {}, Time: {: .2f}, Current Target: {}".format(
+               self.stage,
+               perf_counter() - self.state_time,
+               self.current_target_index
+           )
+        )
+        if self.stage == "ground":
+            pos_setpoint.position.x = self.x_des
+            pos_setpoint.position.y = self.y_des
+            pos_setpoint.position.z = self.z_des
+            pos_setpoint.heading = self.psi_des
+           
+            if self.get_current_time() - self.state_time > 10: 
+                self.state_time = self.get_current_time()
+                self.stage = "takeoff"
+        
+        elif self.stage == "takeoff":
+            pos_setpoint.position.x = self.start_x
+            pos_setpoint.position.y = self.start_y
+            pos_setpoint.position.z = self.target_height
+            pos_setpoint.heading = self.psi_des  
+
+            if self.reached_pos(pos_setpoint):
+                self.state_time = self.get_current_time()
+                self.stage = "follow_path"
+        
+        elif self.stage == "follow_path":
+           current_target_waypoint = self.path[self.current_target_index]
+           pos_setpoint = self.map_to_webots_transform(current_target_waypoint) # move waypoint to webots coordinates 
+
+           pos_setpoint.position.z = self.target_height
+           pos_setpoint.heading = self.psi_des
+
+           current_pos = (self._state.position.x, self._state.position.y)
+           target_pos = (pos_setpoint.position.x, pos_setpoint.position.y)
+           path_pos = (current_target_waypoint.position.x, current_target_waypoint.position.y)
+
+           self.get_logger().info(f"Current Position: {current_pos}, Target Position: {target_pos}, Path position: {path_pos}") # go back to 
+
+        if self.reached_pos(pos_setpoint):
+            self.current_target_index += 1
+
+            if self.current_target_index == len(self.path):
+                self.state_time = self.get_current_time()
+                self.stage = "land"
+        #elif land 
         # publish the setpoint
         self._pos_setpoint_publisher.publish(pos_setpoint)
 
-    
-
-
+    def map_to_webots_transform(self,waypoint): 
+        webots_wp = Waypoint()
+        webots_wp.position.x = waypoint.position.y - 4.5
+        webots_wp.position.y = waypoint.position.x - 5.0
+        return webots_wp
 
 def main(args=None):
     rclpy.init(args=args)
