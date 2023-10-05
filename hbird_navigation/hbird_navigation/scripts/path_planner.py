@@ -147,7 +147,7 @@ class PathPlanner():
         path = []
 
         while len(self.open['id']) > 0:
-            print("###########WHILE", self.open)
+            #print("###########WHILE", self.open)
             node = self.get_lowest(self.open, 'f')        # this is a node object - automatically removed from open
 
             if abs( (node.x-self.env.goal_pose.position.x) + (node.y-self.env.goal_pose.position.y)) < 0.5:
@@ -181,7 +181,7 @@ class PathPlanner():
                     if element.id in self.open['id']:
 
 
-                        print("in OPEN")
+                        #print("in OPEN")
 
                         index = self.open['id'].index(element.id)
 
@@ -201,8 +201,8 @@ class PathPlanner():
 
 
                     elif element.id in self.closed['id']: 
-                        print("in CLOSED")
-                        print("$$$$$$$$$$", self.closed)
+                        #print("in CLOSED")
+                        #print("$$$$$$$$$$", self.closed)
 
                         index = self.closed['id'].index(element.id)
 
@@ -220,7 +220,7 @@ class PathPlanner():
                         self.append_node(self.closed, element)  # add to open list
 
                     else:
-                        print("in ELSE")
+                        #print("in ELSE")
                         self.append_node(self.open, element)  # add to open list
    
         return None
