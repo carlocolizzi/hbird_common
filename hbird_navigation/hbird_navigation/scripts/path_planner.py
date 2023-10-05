@@ -16,7 +16,7 @@ class Node:
         self.parent = parent    # node previous to this in the path
 
         # calculating ID based on coordinates
-        max_cols = (env.x_max - env.x_min) / env.grid_size
+        max_cols = (env.x_max - env.x_min) // env.grid_size
         row = math.ceil(y / env.grid_size)
         column = math.ceil(x / env.grid_size)
 
@@ -39,8 +39,8 @@ class PathPlanner():
         """
         self.env = env
         
-        self.open = {}              # this is a dict with x y g h f parent id as keys and lists as values
-        self.closed = {}            # this is a dict with x y g h f parent id as keys and lists as values
+        self.open = {'x': [], 'y': [], 'g': [], 'h': [], 'f': [], 'parent': [], 'id': []}              # this is a dict with x y g h f parent id as keys and lists as values
+        self.closed = {'x': [], 'y': [], 'g': [], 'h': [], 'f': [], 'parent': [], 'id': []}            # this is a dict with x y g h f parent id as keys and lists as values
 
         start_node = Node(self.env, self.env.start_pose.position.x, self.env.start_pose.position.y, 0, self.heuristic(self.env.start_pose.position.x, self.env.start_pose.position.y), self.heuristic(self.env.start_pose.position.x, self.env.start_pose.position.y), None)
         self.append_node(self.open, start_node)
@@ -80,6 +80,11 @@ class PathPlanner():
                                   [x, y - self.env.grid_size], [x, y + self.env.grid_size],
                                   [x+self.env.grid_size, y - self.env.grid_size], [x+self.env.grid_size, y], [x+self.env.grid_size, y + self.env.grid_size]]
         
+
+        # neighbours_coordinates = [[x-self.env.grid_size, y],
+        #                           [x, y - self.env.grid_size], [x, y + self.env.grid_size], 
+        #                           [x+self.env.grid_size, y]]
+        
         for each in neighbours_coordinates:
             temp = Node(self.env, each[0], each[1], node.g + 1, self.heuristic(each[0], each[1]), node.g + 1 + self.heuristic(each[0], each[1]), node)
             neighbours.append(temp)
@@ -106,7 +111,7 @@ class PathPlanner():
             x = self.env.obstacles['x'][i]
             y = self.env.obstacles['y'][i]
             
-            if self.get_distance(x, y, node.x, node.y) < self.env.robot_radius:
+            if self.get_distance(x, y, node.x, node.y) < self.env.robot_col_radius:
                 check = False
         
         return check    
@@ -115,7 +120,7 @@ class PathPlanner():
         '''
         Returns node from list with lowest 'value'. Also removes node from the list
         '''
-
+        
         index = list[value].index(min(list[value]))
 
         x = list['x'].pop(index)
@@ -124,6 +129,7 @@ class PathPlanner():
         h = list['h'].pop(index)
         f = list['f'].pop(index)
         parent = list['parent'].pop(index)
+        id = list['id'].pop(index)
 
         node = Node(self.env, x, y, g, h, f, parent)
         
@@ -140,11 +146,12 @@ class PathPlanner():
         """
         path = []
 
-        while self.open:
+        while len(self.open['id']) > 0:
+            print("###########WHILE", self.open)
             node = self.get_lowest(self.open, 'f')        # this is a node object - automatically removed from open
-            self.append_node(self.closed, node)
 
-            if node.x == self.env.goal_pose.position.x and node.y == self.env.goal_pose.position.y:     # check if we have reached the goal
+            if abs( (node.x-self.env.goal_pose.position.x) + (node.y-self.env.goal_pose.position.y)) < 0.5:
+            #if node.x == self.env.goal_pose.position.x and node.y == self.env.goal_pose.position.y:     # check if we have reached the goal
                                 
                 while node:
                     waypoint = Waypoint()
@@ -159,8 +166,10 @@ class PathPlanner():
 
                 return path
             
-            else:
-                neighbours = self.get_neighbours(node) 
+            
+            
+            self.append_node(self.closed, node)
+            neighbours = self.get_neighbours(node) 
 
             for element in neighbours:
 
@@ -168,20 +177,18 @@ class PathPlanner():
                 obstacles = self.check_obstacles(element)   # check if any obstacles are overlapping
             
                 if bounds == True and obstacles == True:
-                    if element.id in self.closed['id']: 
-                        
-                        index = self.closed['id'].index(element.id)
-
-                        if element.f > self.closed['f'][index]:
-                            continue
 
                     if element.id in self.open['id']:
 
-                        index = self.closed['id'].index(element.id)
+
+                        print("in OPEN")
+
+                        index = self.open['id'].index(element.id)
 
                         if element.f > self.open['f'][index]: ### need to fidn out how to find element in dict
                             continue
-
+                        
+                        
                         self.open['x'].pop(index)           # delete istance from dictionary
                         self.open['y'].pop(index)
                         self.open['g'].pop(index)
@@ -189,9 +196,32 @@ class PathPlanner():
                         self.open['f'].pop(index)
                         self.open['parent'].pop(index)
                         self.open['id'].pop(index)
-                    
-                    # self.open.get(old one)
-                    self.append_node(self.closed, element)  # add to closed list
+                        
+                        self.append_node(self.open, element)  # add to open list
+
+
+                    elif element.id in self.closed['id']: 
+                        print("in CLOSED")
+                        print("$$$$$$$$$$", self.closed)
+
+                        index = self.closed['id'].index(element.id)
+
+                        if element.f > self.closed['f'][index]:
+                            continue
+
+                        self.closed['x'].pop(index)           # delete istance from dictionary
+                        self.closed['y'].pop(index)
+                        self.closed['g'].pop(index)
+                        self.closed['h'].pop(index)
+                        self.closed['f'].pop(index)
+                        self.closed['parent'].pop(index)
+                        self.closed['id'].pop(index)
+
+                        self.append_node(self.closed, element)  # add to open list
+
+                    else:
+                        print("in ELSE")
+                        self.append_node(self.open, element)  # add to open list
    
         return None
 
