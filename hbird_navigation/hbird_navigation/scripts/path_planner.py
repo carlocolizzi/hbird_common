@@ -95,8 +95,8 @@ class PathPlanner():
 
         check = False
 
-        if node.x >= self.env.x_min and node.x <= self.env.x_max:
-            if node.y >= self.env.y_min and node.y <= self.env.y_max:
+        if (node.x -  self.env.robot_col_radius) >= self.env.x_min and (node.x +  self.env.robot_col_radius) <= self.env.x_max:
+            if (node.y -  self.env.robot_col_radius) >= self.env.y_min and (node.y +  self.env.robot_col_radius) <= self.env.y_max:
                 check = True
         
         return check
