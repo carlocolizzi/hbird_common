@@ -24,4 +24,6 @@ We learned about the different specific considerations that are to be taken to c
  
 ### What more would you like to learn about motion planning?
 Lulu:  I would like to learn more about the different path planning algorithms that could be used along with trajectory planning because we never fully got into it. 
+
+
 Carlo: I would like to learn more about how kinematics could affect 3D paths and how external factors (wind, etc...) could be taken into account.
