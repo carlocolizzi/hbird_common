@@ -150,6 +150,7 @@ class PathPlanner():
                     waypoint = Waypoint()
                     waypoint.position.x = node.x
                     waypoint.position.y = node.y
+                    waypoint.position.z = 1.0
                     
                     path.append(waypoint)
                     node = node.parent

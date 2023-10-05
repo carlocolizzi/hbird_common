@@ -69,10 +69,10 @@ class AgentControlNode(Node):
         self.state_time = perf_counter()
         self.stage = "ground"
 
-        self.start_x = self.env.start_pose.position.x - 4.5
-        self.start_y = self.env.start_pose.position.y - 5.0 
-        self.goal_x = self.env.goal_pose.x - 4.5
-        self.goal_y = self.env.goal_pose.y - 5.0 
+        self.start_x = self.env.start_pose.position.x# - 4.5
+        self.start_y = self.env.start_pose.position.y# - 5.0 
+        self.goal_x = self.env.goal_pose.x# - 4.5
+        self.goal_y = self.env.goal_pose.y# - 5.0 
        
  
         """# set desired position setpoints
@@ -176,8 +176,8 @@ class AgentControlNode(Node):
 
     def map_to_webots_transform(self,waypoint): 
         webots_wp = Waypoint()
-        webots_wp.position.x = waypoint.position.y - 4.5
-        webots_wp.position.y = waypoint.position.x - 5.0
+        webots_wp.position.x = waypoint.position.y# - 4.5
+        webots_wp.position.y = waypoint.position.x# - 5.0
         return webots_wp
 
 def main(args=None):
