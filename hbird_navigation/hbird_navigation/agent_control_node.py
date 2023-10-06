@@ -10,7 +10,6 @@ from .scripts.path_planner import PathPlanner
 from .scripts.planner_utils import Environment, Visualizer
 
 import math
-from time import perf_counter
 
 class AgentControlNode(Node):
     
@@ -19,7 +18,7 @@ class AgentControlNode(Node):
 
         self.get_logger().info('Starting up the Agent Control Node...')
 
-        # TODO: Add the parameter getter and the parameter declaration
+        # Add the parameter getter and the parameter declaration
         param_descriptor = ParameterDescriptor(description='Defines agent ID.')
         self.declare_parameter('agent_id', 'HB1', param_descriptor)
         self._agent_id = self.get_parameter('agent_id')._value
@@ -53,112 +52,101 @@ class AgentControlNode(Node):
 
         # set up environment and obtain path
         env = Environment(config)
+
+        # initialize planner
         path_planner = PathPlanner(env)
+
+        # call planner
         self.path = path_planner.plan()
         
         # initialize and call the visualizer
         viz = Visualizer(env)
         viz.plot(self.path)
 
+        self.index = 0
+        self.travel_height = 1.2
 
-
-        self.current_target_index = 0
-        self.target_height = 1.2
-
-        # set thresholds
-        self.pos_threshold = 0.5
-        self.orient_threshold = 0.05
-        self.state_time = perf_counter()
-
+        # initialise state - this is the current status of the sim
         self.stage = "ground"
         self._state = State()
 
+        # convert coordinates to webots coordinates
         self.start_x = env.start_pose.position.x - 4.5
         self.start_y = env.start_pose.position.y - 5.0
         self.goal_x = env.goal_pose.position.x - 4.5
         self.goal_y = env.goal_pose.position.y - 5.0
 
-        ###### DEF ANGLE WRAP
-
     def state_update_callback(self, state_msg):
         self._state = state_msg
 
-    def reached_pos(self, target_pos):
+    def reached_target_pose(self, target_pos):
         pos_error = math.sqrt((self._state.position.x - target_pos.position.x) ** 2
                             + (self._state.position.y - target_pos.position.y) ** 2)
                             
-        
-        #orient_error = abs(self.angle_wrap(self._state.orientation.z - target_pos.heading))
-
-        return pos_error < self.pos_threshold #and orient_error < self.orient_threshold
+        if pos_error < 0.5:         # error threshold to go to next point
+            return True
+        else:
+            return False
     
     
     def control_cycle(self):
 
         pos_setpoint = Waypoint()
-        
-        match self.stage:
-            case "ground":
-                self.get_logger().info('Ground')
+        pos_setpoint.heading = 0.0
 
-                pos_setpoint.position.x = self.start_x
-                pos_setpoint.position.y = self.start_y
-                pos_setpoint.position.z = 0.0
-                pos_setpoint.heading = 0.0
-                if perf_counter() - self.state_time > 10:
-                    self.state_time = perf_counter()
-                    self.stage = "takeoff"
-            case "takeoff":
-                self.get_logger().info('takeoff')
+        if self.stage == "ground":
+            # self.get_logger().info('Ground')
 
-                pos_setpoint.position.x = self.start_x
-                pos_setpoint.position.y = self.start_y
-                pos_setpoint.position.z = self.target_height
-                pos_setpoint.heading = 0.0
-                if self.reached_pos(pos_setpoint):
-                    self.state_time = perf_counter()
-                    self.stage = "follow"
-            case "follow":
-                self.get_logger().info('follow')
+            pos_setpoint.position.x = self.start_x
+            pos_setpoint.position.y = self.start_y
+            pos_setpoint.position.z = 0.0
 
-                pos_setpoint = self.map_to_webots_transform(
-                    self.path[self.current_target_index]
-                )
-                pos_setpoint.position.z = self.target_height
-                pos_setpoint.heading = 0.0
-                # self.get_logger().info(f"Cur Pos {self._state.position.x:.2f},{self._state.position.y:.2f}, Target Pos {pos_setpoint.position.x:.2f},{pos_setpoint.position.y:.2f}, Path pos {self.path[self.current_target_index].position.x:.2f}, {self.path[self.current_target_index].position.y:.2f}")
-                if self.reached_pos(pos_setpoint):
-                    self.current_target_index += 1
-                    if self.current_target_index == len(self.path):
-                        self.state_time = perf_counter()
-                        self.stage = "land"
-            case "land":
-                self.get_logger().info('land')
+            self.stage = "takeoff"
 
-                pos_setpoint.position.x = self.goal_x
-                pos_setpoint.position.y = self.goal_y
-                self.get_logger().info('switching to z land')
+        elif self.stage == "takeoff":
+            # self.get_logger().info('takeoff')
 
-                pos_setpoint.position.z = -1.2
-                pos_setpoint.heading = 0.0
-                if perf_counter() - self.state_time > 5:
-                    self.stage = "end"
-            case "end":
-                while True:
-                    pass
+            pos_setpoint.position.x = self.start_x
+            pos_setpoint.position.y = self.start_y
+            pos_setpoint.position.z = self.travel_height
+
+            if self.reached_target_pose(pos_setpoint):
+                self.stage = "follow"
+
+        elif self.stage == "follow":
+            # self.get_logger().info('follow')
+
+            pos_setpoint = self.map_to_webots_transform(self.path[self.index])
+            pos_setpoint.position.z = self.travel_height
+
+            if self.reached_target_pose(pos_setpoint):
+                self.index += 1
+                if self.index == len(self.path):
+                    self.stage = "land"
+
+        elif self.stage == "land":
+            # self.get_logger().info('land')
+
+            pos_setpoint.position.x = self.goal_x
+            pos_setpoint.position.y = self.goal_y
+            # self.get_logger().info('switching to z land')
+
+            pos_setpoint.position.z = -1.2
+            self.stage = "end"
+
+        elif self.stage == "end":
+            while True:
+                pass
     
         # publish the setpoint
         self._pos_setpoint_publisher.publish(pos_setpoint)
 
-    
     def map_to_webots_transform(self, waypoint):
         """Helper function that returns a Waypoint adjusted to the webots reference frame"""
         webots_wp = Waypoint()
         webots_wp.position.x = waypoint.position.x - 4.5
         webots_wp.position.y = waypoint.position.y - 5.0
         return webots_wp
-
-
 
 def main(args=None):
     rclpy.init(args=args)
