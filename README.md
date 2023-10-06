@@ -2,6 +2,9 @@
 
 ## Path Planning
 
+![](https://github.com/carlocolizzi/hbird_common/blob/main/GIF.gif)
+
+
 ![](https://github.com/carlocolizzi/hbird_common/blob/main/Figure_1.png)
 ![](https://github.com/carlocolizzi/hbird_common/blob/main/Figure_2.png)
 ![](https://github.com/carlocolizzi/hbird_common/blob/main/Figure_3.png)
